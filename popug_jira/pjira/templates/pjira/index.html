@@ -1,0 +1,9 @@
+{% if tasks %}
+    <ul>
+    {% for task in tasks %}
+        <li><a href="{% url 'pjira:detail' task.id %}">A task '{{ task.description }}' assigned to '{{task.assignee.name }}'</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No tasks.</p>
+{% endif %}
