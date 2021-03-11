@@ -1,9 +1,23 @@
 {% if tasks %}
     <ul>
     {% for task in tasks %}
-        <li><a href="{% url 'pjira:detail' task.id %}">A task '{{ task.description }}' assigned to '{{task.assignee.name }}'</a></li>
+        <li><a href="{% url 'pjira:detail' task.id %}">A task '{{ task.description }}' assigned to '{{task.assignee.name }}' was opened at {{task.open_date}}</a></li>
     {% endfor %}
     </ul>
 {% else %}
     <p>No tasks.</p>
 {% endif %}
+
+<h1>Add new task</h1>
+
+{% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
+
+<form action="{% url 'pjira:add_task' %}" method="post">
+    {% csrf_token %}
+    {{ form }}
+    <input type="submit" value="Submit">
+</form>
+
+<!-- <form action="{% url 'pjira:add_task' %}" method='GET'>
+<button type="submit"> Assign tasks </button>
+</form> -->
