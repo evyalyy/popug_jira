@@ -3,13 +3,14 @@ from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect, HttpResponseServerError
 from django.urls import reverse
 
-from .models import Task, Employee
+from .models import Task, Employee, TaskStatus
 from .forms import AddTaskForm
 
 
 def index(request):
-    tasks = Task.objects.order_by('-open_date')
-    return render(request, 'pjira/index.html', {'tasks': tasks})
+    open_tasks = Task.objects.filter(status=TaskStatus.OPEN).order_by('-open_date')
+    closed_tasks = Task.objects.filter(status=TaskStatus.CLOSED).order_by('-open_date')
+    return render(request, 'pjira/index.html', {'open_tasks': open_tasks, 'closed_tasks': closed_tasks})
 
 def detail(request, task_id):
     try:
@@ -41,3 +42,16 @@ def add_task(request):
         form = AddTaskForm()
 
     return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
+
+def close_task(request, task_id):
+    if request.method == 'POST':
+        print('About to close', task_id)
+        try:
+            task = Task.objects.get(pk=task_id)
+        except Task.DoesNotExist:
+            raise Http404("Task does not exist")
+        task.status = TaskStatus.CLOSED
+        task.save()
+        return HttpResponseRedirect(reverse('pjira:index'))
+
+    raise HttpResponseServerError("Wrong method")

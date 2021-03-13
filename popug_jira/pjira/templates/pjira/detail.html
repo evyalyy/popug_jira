@@ -1,1 +1,6 @@
 {{ task }}
+
+<form action="{% url 'pjira:close_task' task.id %}" method="POST">
+	{% csrf_token %}
+<button type="submit"> Close task </button>
+</form>
