@@ -8,16 +8,8 @@
     <p>No tasks.</p>
 {% endif %}
 
-<h1>Add new task</h1>
 
-{% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
-
-<form action="{% url 'pjira:add_task' %}" method="post">
-    {% csrf_token %}
-    {{ form }}
-    <input type="submit" value="Submit">
-</form>
-
+<a href="{% url 'pjira:add_task' %}"> Add task page</a>
 <!-- <form action="{% url 'pjira:add_task' %}" method='GET'>
 <button type="submit"> Assign tasks </button>
 </form> -->
