@@ -22,4 +22,18 @@
     <p>No tasks.</p>
 {% endif %}
 
+<h1>Employees</h1>
+
+{% if employees %}
+    <ul>
+    {% for employee in employees %}
+        <li><a href="{% url 'pjira:employee' employee.id %}">{{ employee.name }}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No employees.</p>
+{% endif %}
+
 <a href="{% url 'pjira:add_task' %}"> Add task page</a>
+<p>
+<a href="{% url 'pjira:assign_tasks' %}"> Assign tasks page (managers only)</a>
