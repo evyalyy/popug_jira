@@ -1,0 +1,6 @@
+<h1>Assign tasks</h1>
+
+<form action="{% url 'pjira:assign_tasks' %}" method="POST">
+	{% csrf_token %}
+<button type="submit"> Assign </button>
+</form>

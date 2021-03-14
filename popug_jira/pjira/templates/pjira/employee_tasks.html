@@ -1,0 +1,17 @@
+<h1>My ({{me.name}}) open tasks</h1>
+
+{% if open_tasks %}
+    <ul>
+    {% for task in open_tasks %}
+        <li>
+        	<a href="{% url 'pjira:detail' task.id %}">{{task}}</a>
+        	<form action="{% url 'pjira:close_task' task.id %}" method="POST">
+				{% csrf_token %}
+				<button type="submit"> Close </button>
+			</form>
+		</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No tasks.</p>
+{% endif %}

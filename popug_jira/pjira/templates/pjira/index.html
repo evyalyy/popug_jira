@@ -1,0 +1,39 @@
+<h1>Open tasks</h1>
+
+{% if open_tasks %}
+    <ul>
+    {% for task in open_tasks %}
+        <li><a href="{% url 'pjira:detail' task.id %}">A task '{{ task.description }}' assigned to '{{task.assignee.name }}' was opened at {{task.open_date}}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No tasks.</p>
+{% endif %}
+
+<h1>Closed tasks</h1>
+
+{% if closed_tasks %}
+    <ul>
+    {% for task in closed_tasks %}
+        <li><a href="{% url 'pjira:detail' task.id %}">A task '{{ task.description }}' assigned to '{{task.assignee.name }}' was opened at {{task.open_date}}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No tasks.</p>
+{% endif %}
+
+<h1>Employees</h1>
+
+{% if employees %}
+    <ul>
+    {% for employee in employees %}
+        <li><a href="{% url 'pjira:employee' employee.id %}">{{ employee.name }}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No employees.</p>
+{% endif %}
+
+<a href="{% url 'pjira:add_task' %}"> Add task page</a>
+<p>
+<a href="{% url 'pjira:assign_tasks' %}"> Assign tasks page (managers only)</a>
