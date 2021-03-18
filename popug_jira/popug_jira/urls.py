@@ -19,5 +19,6 @@ from django.urls import include, path
 
 urlpatterns = [
     path('pjira/', include('pjira.urls')),
-    path('admin/', admin.site.urls),
+    path('auth/', include('auth_service.urls')),
+    path('admin/', admin.site.urls)
 ]

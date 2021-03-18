@@ -4,16 +4,21 @@ from django.urls import reverse
 
 from .models import Task, Employee, TaskStatus
 from .forms import AddTaskForm
+from auth_service.models import Role
 
 import random
+import requests
 
+from common.authorized_only import authorized_only
 
+@authorized_only(roles=[Role.EMPLOYEE])
 def index(request):
     open_tasks = Task.objects.filter(status=TaskStatus.OPEN).order_by('-open_date')
     closed_tasks = Task.objects.filter(status=TaskStatus.CLOSED).order_by('-open_date')
     employees = Employee.objects.all()
     return render(request, 'pjira/index.html', {'open_tasks': open_tasks, 'closed_tasks': closed_tasks, 'employees': employees})
 
+@authorized_only(roles=[Role.EMPLOYEE])
 def detail(request, task_id):
     try:
         task = Task.objects.get(pk=task_id)
@@ -21,7 +26,7 @@ def detail(request, task_id):
         raise Http404("Task does not exist")
     return render(request, 'pjira/detail.html', {'task': task})
 
-
+@authorized_only(roles=[Role.EMPLOYEE])
 def add_task(request):
     # if this is a POST request we need to process the form data
     error_message = None
@@ -45,6 +50,7 @@ def add_task(request):
 
     return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
 
+@authorized_only(roles=[Role.EMPLOYEE])
 def close_task(request, task_id):
     if request.method == 'POST':
         print('About to close', task_id)
@@ -58,6 +64,7 @@ def close_task(request, task_id):
 
     raise HttpResponseServerError("Wrong method")
 
+@authorized_only(roles=[Role.MANAGER, Role.ADMIN])
 def assign_tasks(request):
     if request.method == 'POST':
         print('Assigning tasks')
@@ -70,7 +77,7 @@ def assign_tasks(request):
     else:
         return render(request, 'pjira/assign_tasks.html')
 
-
+@authorized_only(roles=[Role.EMPLOYEE])
 def employee_tasks(request, employee_id):
     try:
         me = Employee.objects.get(pk=employee_id)

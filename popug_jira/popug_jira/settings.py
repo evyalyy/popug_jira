@@ -22,6 +22,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'lo%svrs8_)k+f-%w2b&di@xg03@bqx*t8l3l4+#0ci@^kesg=t'
 
+JWT_ALGO = 'HS256'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -32,12 +33,13 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     'pjira.apps.PjiraConfig',
+    'auth_service.apps.AuthServiceConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'django.contrib.staticfiles'
 ]
 
 MIDDLEWARE = [
