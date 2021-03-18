@@ -13,4 +13,4 @@ class Employee(models.Model):
     role = models.JSONField(default=list)
 
     def __str__(self):
-        return self.name
+        return 'Name: {}, email: {}, roles: {}'.format(self.name, self.email, ','.join([Role(r).label for r in self.role]))

@@ -1,0 +1,11 @@
+{% if accounts %}
+    <ul>
+    {% for acc in accounts %}
+        <li>
+        	<a href="{% url 'auth_service:change' acc.id %}">{{acc}}</a>
+		</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No accounts.</p>
+{% endif %}
