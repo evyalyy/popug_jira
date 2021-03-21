@@ -62,7 +62,7 @@ def create_employee(name, email, password):
     emp = Employee.objects.create(name=name, email=email, password=password, roles=[Role.EMPLOYEE])
     emp.save()
 
-    event = AccountCreatedCUD(id=emp.id, name=emp.name, email=emp.email)
+    event = AccountCreatedCUD(id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
     send_event(producer, 'accounts', event)
 
 

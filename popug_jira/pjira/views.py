@@ -7,17 +7,18 @@ from .models import Task, Employee, TaskStatus
 from .forms import AddTaskForm
 from auth_service.models import Role
 
-import random
-import requests
-
 from common.authorized_only import authorized_only
 from common.events import send_event
 from common.events import AccountCreatedCUD, AccountChangedCUD, AccountRoleChangedCUD
-from common.events import TaskCreatedBE
+from common.events import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
 
+import random
+import requests
+import jwt
 import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
+
 
 producer = KafkaProducer(bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
@@ -26,9 +27,9 @@ stop_consumers = False
 
 def consume_accounts(js):
     tp = js['type']
-        
+
     if tp == AccountCreatedCUD.__name__:
-        emp = Employee.objects.create(id=js['id'], name=js['name'])
+        emp = Employee.objects.create(id=js['id'], name=js['name'], roles=js['roles'])
         emp.save()
     elif tp == AccountChangedCUD.__name__:
         try:
@@ -117,12 +118,18 @@ def close_task(request, task_id):
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
             raise Http404("Task does not exist")
+
+        decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
+        my_id = decoded['id']
+        if my_id != task.assignee.id:
+            return HttpResponseServerError('You cannot close task not assigned to you')
+
         task.status = TaskStatus.CLOSED
         task.save()
         send_event(producer, 'tasks', TaskClosedBE(id=task.id))
         return HttpResponseRedirect(reverse('pjira:index'))
 
-    raise HttpResponseServerError("Wrong method")
+    return HttpResponseServerError("Wrong method")
 
 
 @authorized_only(model=Employee, allowed_roles=[Role.MANAGER])

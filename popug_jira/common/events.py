@@ -8,7 +8,7 @@ def send_event(producer, topic, event):
         print('Error when seding event:', e)
 
     # Successful result returns assigned partition and offset
-    print('[CUD] send event: {} to topic `{}`, partition: {}, offset: {}'.format(
+    print('[EVENT] send event: {} to topic `{}`, partition: {}, offset: {}'.format(
         event, record_metadata.topic, record_metadata.partition, record_metadata.offset))
 
 class EventBase(object):
