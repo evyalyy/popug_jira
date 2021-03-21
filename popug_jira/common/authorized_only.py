@@ -4,7 +4,7 @@ from django.http import HttpResponse
 import functools
 import jwt
 
-def authorized_only(roles):
+def authorized_only(model, allowed_roles):
     def decorator_authorized_only(func):
         @functools.wraps(func)
         def wrapper_authorized_only(request, *args, **kwargs):
@@ -14,9 +14,15 @@ def authorized_only(roles):
 
             decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
 
+            try:
+                emp = model.objects.get(id=decoded['id'])
+            except model.DoesNotExist:
+                return HttpResponse('[AUTH] account not found', status=404)
+
             authorized = False
-            for role in decoded.get('roles',[]):
-                if role in roles:
+            for role in emp.roles:
+            # for role in decoded.get('roles',[]):
+                if role in allowed_roles:
                     authorized = True
                     break
 

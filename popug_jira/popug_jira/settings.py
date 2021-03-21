@@ -23,6 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'lo%svrs8_)k+f-%w2b&di@xg03@bqx*t8l3l4+#0ci@^kesg=t'
 
 JWT_ALGO = 'HS256'
+KAFKA_HOST='localhost:9092'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
