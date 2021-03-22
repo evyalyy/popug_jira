@@ -126,7 +126,7 @@ def close_task(request, task_id):
 
         task.status = TaskStatus.CLOSED
         task.save()
-        send_event(producer, 'tasks', TaskClosedBE(id=task.id))
+        send_event(producer, 'tasks', TaskClosedBE(id=task.id, assignee=task.assignee.id))
         return HttpResponseRedirect(reverse('pjira:index'))
 
     return HttpResponseServerError("Wrong method")

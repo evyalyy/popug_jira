@@ -35,6 +35,7 @@ ALLOWED_HOSTS = []
 INSTALLED_APPS = [
     'pjira.apps.PjiraConfig',
     'auth_service.apps.AuthServiceConfig',
+    'accounting.apps.AccountingConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

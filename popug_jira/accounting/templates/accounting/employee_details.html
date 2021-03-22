@@ -1,0 +1,15 @@
+<h1>{{me.name}} today transactions</h1>
+
+<p>Today balance is {{me.wallet}}</p>
+
+{% if transactions %}
+    <ul>
+    {% for tr in transactions %}
+        <li>
+            Transaction of {{tr.plus}} plus, {{tr.minus}} minus, created at {{tr.ts}}: {{tr.description}}
+		</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No transactions.</p>
+{% endif %}

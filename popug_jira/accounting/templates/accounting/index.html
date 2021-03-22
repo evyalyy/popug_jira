@@ -1,0 +1,13 @@
+<h1>Employees</h1>
+
+<p>Today managers earned: {{total}}</p>
+
+{% if employees %}
+    <ul>
+    {% for employee in employees %}
+        <li><a href="{% url 'accounting:employee' employee.id %}">{{ employee.name }}</a></li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No employees.</p>
+{% endif %}

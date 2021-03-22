@@ -12,6 +12,7 @@ class RegisterForm(forms.Form):
     email = forms.EmailField(label='email', max_length=200)
     password = forms.CharField(label='password', max_length=200)
     repeat_password = forms.CharField(label='repeat_password', max_length=200)
+    roles = forms.MultipleChoiceField(choices=Role.choices)
 
 class ChangeAccountForm(forms.Form):
     name = forms.CharField(label='name', max_length=200)

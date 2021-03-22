@@ -54,12 +54,12 @@ def update_employee_by_email(email, name, password, roles):
         send_event(producer, 'accounts', roles_changed_event)
 
 
-def create_employee(name, email, password):
+def create_employee(name, email, password, roles):
     emp_list = Employee.objects.filter(email=email)
     if len(emp_list) != 0:
         raise ValueError('Email already registered')
 
-    emp = Employee.objects.create(name=name, email=email, password=password, roles=[Role.EMPLOYEE])
+    emp = Employee.objects.create(name=name, email=email, password=password, roles=roles)
     emp.save()
 
     event = AccountCreatedCUD(id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
@@ -113,11 +113,12 @@ def register(request):
                 email = form.cleaned_data['email']
                 password = form.cleaned_data['password']
                 repeat_password = form.cleaned_data['repeat_password']
+                roles = [int(role) for role in form.cleaned_data['roles']]
 
                 if password != repeat_password:
                     raise ValueError('Passwords do not match')
 
-                create_employee(name, email, password)
+                create_employee(name, email, password, roles)
 
             except Exception as e:
                 error_message = str(e)
