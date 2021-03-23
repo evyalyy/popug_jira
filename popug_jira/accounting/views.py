@@ -8,9 +8,8 @@ from .models import Task, Employee, Transaction, TransactionKind
 from auth_service.models import Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event, get_schema_by_name
-from common.events import AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
-from common.events import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
+from common.events import send_event, consume_accounts, consumer_func, get_schema_type_from_meta
+from common.events import TaskCreatedBESchema, TaskAssignedBESchema, TaskClosedBESchema
 
 import random
 import requests
@@ -21,60 +20,41 @@ from datetime import datetime
 from kafka import KafkaProducer, KafkaConsumer
 
 
-producer = KafkaProducer(bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
+producer = KafkaProducer(client_id='accounting_transactions',
+                         bootstrap_servers=[settings.KAFKA_HOST],
+                         value_serializer=lambda m: json.dumps(m).encode('ascii'))
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
 
-stop_consumers = False
 
-
-def consume_accounts(js):
-    meta = js['meta']
-    if meta['version'] != 1:
-        print('[ACCOUNTING][ERROR] wrong version. meta:', meta)
+def consume_tasks(message_json, label):
+    
+    schema_type = get_schema_type_from_meta(message_json, 1)
+    if schema_type is None:
+        # Need some handling of unexpected version
+        print('Incompatible version')
         return
 
-    sch = get_schema_by_name(1, meta['event_type'])
-
-    errors = sch().validate(js)
+    errors = schema_type().validate(message_json)
     
     if len(errors) > 0:
-        print('[ACCOUNTING][ERROR] consume validation errors: {}'.format(errors))
+        print('[{}][ERROR] consume validation errors: {}'.format(label, errors))
         return
 
-    if sch == AccountCreatedCUDSchema:
-        emp = Employee.objects.create(id=js['account_id'], name=js['name'], roles=js['roles'])
-        emp.save()
-    elif sch == AccountChangedCUDSchema:
-        try:
-            emp = Employee.objects.get(id=js['account_id'])
-            emp.name = js['name']
-            emp.save()
-        except Employee.DoesNotExist:
-            print('[ACCOUNTING][ERROR] account does not exist')
-    elif sch == AccountRoleChangedCUDSchema:
-        try:
-            emp = Employee.objects.get(id=js['account_id'])
-            emp.roles = js['roles']
-            emp.save()
-        except Employee.DoesNotExist:
-            print('[ACCOUNTING][ERROR] account does not exist')
-
-
-def consume_tasks(js):
-    tp = js['type']
-
-    if tp == TaskCreatedBE.__name__:
+    if schema_type == TaskCreatedBESchema:
         cost_assign = random.randint(10, 20)
         cost_close = random.randint(20, 40)
-        emp = Task.objects.create(id=js['id'], description=js['description'], cost_assign=cost_assign, cost_close=cost_close)
+        emp = Task.objects.create(id=message_json['task_id'],
+                                  description=message_json['description'],
+                                  cost_assign=cost_assign,
+                                  cost_close=cost_close)
         emp.save()
-    elif tp == TaskAssignedBE.__name__:
+    elif schema_type == TaskAssignedBESchema:
         try:
             with transaction.atomic():
-                emp = Employee.objects.get(id=js['assignee'])
-                task = Task.objects.get(id=js['id'])
+                emp = Employee.objects.get(id=message_json['assignee_id'])
+                task = Task.objects.get(id=message_json['task_id'])
 
                 tr = Transaction.objects.create(account_id=emp,
                                                 minus=task.cost_assign,
@@ -85,16 +65,16 @@ def consume_tasks(js):
                 emp.wallet -= tr.minus
                 emp.save()
         except Employee.DoesNotExist:
-            print('[ACCOUNTING][ERROR] account does not exist')
+            print('[{}][ERROR] account does not exist'.format(label))
         except Task.DoesNotExist:
-            print('[ACCOUNTING][ERROR] task does not exist')
+            print('[{}][ERROR] task does not exist'.format(label))
         except Exception as e:
-            print('[ACCOUNTING][ERROR]', e)
-    elif tp == TaskClosedBE.__name__:
+            print('[{}][ERROR] {}'.format(label,e))
+    elif schema_type == TaskClosedBESchema:
         try:
             with transaction.atomic():
-                emp = Employee.objects.get(id=js['assignee'])
-                task = Task.objects.get(id=js['id'])
+                emp = Employee.objects.get(id=message_json['assignee_id'])
+                task = Task.objects.get(id=message_json['task_id'])
 
                 tr = Transaction.objects.create(account_id=emp,
                                                 plus=task.cost_close,
@@ -105,32 +85,16 @@ def consume_tasks(js):
                 emp.wallet += tr.plus
                 emp.save()
         except Employee.DoesNotExist:
-            print('[ACCOUNTING][ERROR] account does not exist')
+            print('[{}][ERROR] account does not exist'.format(label))
         except Task.DoesNotExist:
-            print('[ACCOUNTING][ERROR] task does not exist')
+            print('[{}][ERROR] task does not exist'.format(label))
         except Exception as e:
-            print('[ACCOUNTING][ERROR]', e)
+            print('[{}][ERROR] {}'.format(label,e))
 
 
-def consumer_func(consumer, func):
-    global stop_consumers
-    print('[ACCOUNTING] CONSUMERS STARTED')
-    while not stop_consumers:
-        for message in consumer:
-            # message value and key are raw bytes -- decode if necessary!
-            # e.g., for unicode: `message.value.decode('utf-8')`
-            print ("[ACCOUNTING] consumed %s:%d:%d: key=%s value=%s" % (message.topic, message.partition,
-                                                  message.offset, message.key,
-                                                  message.value))
-            js = json.loads(message.value.decode('ascii'))
-            print('[ACCOUNTING] type:', js['meta'])
-
-            func(js)
-
-
-thr = threading.Thread(target=consumer_func, args=(accounts_consumer, consume_accounts))
+thr = threading.Thread(target=consumer_func, args=(accounts_consumer, consume_accounts, 'accounting', Employee))
 thr.start()
-thr2 = threading.Thread(target=consumer_func, args=(tasks_consumer, consume_tasks))
+thr2 = threading.Thread(target=consumer_func, args=(tasks_consumer, consume_tasks, 'accounting'))
 thr2.start()
 
 

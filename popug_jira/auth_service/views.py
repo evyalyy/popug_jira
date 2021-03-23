@@ -7,7 +7,7 @@ from .forms import LoginForm, RegisterForm, ChangeAccountForm
 from .models import Employee, Role
 
 from common.authorized_only import authorized_only
-from common.events import make_event, send_event, AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
+from common.events import make_event, send_event, AccountCreatedCUDSchema, AccountChangedCUDSchema
 
 import jwt
 
@@ -26,19 +26,13 @@ def update_employee_by_email(email, name, password, roles):
     except Employee.DoesNotExist:
         raise Http404("Account does not exist")
 
-    roles_changed_event = None
-    if acc.roles != roles:
-        roles_changed_event = make_event(account_id=acc.id, roles=roles)
-
     acc.name = name
     acc.password = password
     acc.roles = roles
     acc.save()
 
-    send_event(auth_service_producer, 'accounts', 1, AccountChangedCUDSchema, make_event(account_id=acc.id, name=acc.name, email=acc.email))
-
-    if roles_changed_event:
-        send_event(auth_service_producer, 'accounts', 1, AccountRoleChangedCUDSchema, roles_changed_event)
+    send_event(auth_service_producer, 'accounts', 1, AccountChangedCUDSchema,
+                make_event(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles))
 
 
 def create_employee(name, email, password, roles):
