@@ -8,6 +8,8 @@ from .models import Employee, Role
 
 from common.authorized_only import authorized_only
 from common.events import make_event, send_event, AccountCreatedCUDSchema, AccountChangedCUDSchema
+from common.events import register_schema
+from common.events import AccountCreatedCUDSchema2, AccountChangedCUDSchema2
 
 import jwt
 
@@ -31,8 +33,10 @@ def update_employee_by_email(email, name, password, roles):
     acc.roles = roles
     acc.save()
 
+    ev2 = AccountChangedCUDSchema2(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
+
     send_event(auth_service_producer, 'accounts', 1, AccountChangedCUDSchema,
-                make_event(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles))
+                make_event(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles), ev2)
 
 
 def create_employee(name, email, password, roles):
@@ -44,7 +48,8 @@ def create_employee(name, email, password, roles):
     emp.save()
 
     ev = make_event(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(auth_service_producer, 'accounts', 1, AccountCreatedCUDSchema, ev)
+    ev2 = AccountCreatedCUDSchema2(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
+    send_event(auth_service_producer, 'accounts', 1, AccountCreatedCUDSchema, ev, ev2)
 
 
 def login(request):

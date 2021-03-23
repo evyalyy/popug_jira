@@ -106,8 +106,6 @@ def index(request):
     total = 0
     for tr in transactions:
         total += tr.plus - tr.minus
-    print('Total:', total)
-    print(employees)
     return render(request, 'accounting/index.html', {'employees': employees, 'total': total})
 
 
@@ -117,9 +115,7 @@ def employee_details(request, employee_id):
         me = Employee.objects.get(pk=employee_id)
     except Employee.DoesNotExist:
         raise Http404("Employee {} does not exist".format(employee_id))
-    print('ME',me)
     now = datetime.now()
     print(now)
     transactions = Transaction.objects.filter(account_id=me.id, ts__year=now.year, ts__month=now.month, ts__day=now.day).order_by('-ts')
-    print('My transactions', transactions)
     return render(request, 'accounting/employee_details.html', {'transactions': transactions, 'me': me})

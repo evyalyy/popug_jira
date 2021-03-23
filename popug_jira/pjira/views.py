@@ -11,6 +11,7 @@ from common.authorized_only import authorized_only
 from common.events import send_event, make_event, consume_accounts, consumer_func
 # from common.events import AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
 from common.events import TaskCreatedBESchema, TaskAssignedBESchema, TaskClosedBESchema
+from common.events import AccountCreatedCUDSchema2, AccountChangedCUDSchema2, register_schema
 
 import random
 import requests
@@ -19,6 +20,24 @@ import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
 
+def AccountCreatedHandler(event):
+    emp = Employee.objects.create(id=event.account_id,
+                                        name=event.name,
+                                        roles=event.roles)
+    emp.save()
+
+def AccountChangedHandler(event):
+    try:
+        emp = Employee.objects.get(id=event.account_id)
+        emp.name = event.name
+        emp.roles = event.roles
+        emp.save()
+    except Employee.DoesNotExist:
+        print('[{}][ERROR] account {} does not exist'.format('pjira', event.account_id))
+
+
+register_schema(1, AccountCreatedCUDSchema2, AccountCreatedHandler)
+register_schema(1, AccountChangedCUDSchema2, AccountChangedHandler)
 
 producer = KafkaProducer(client_id='pjira_tasks',
                         bootstrap_servers=[settings.KAFKA_HOST],
