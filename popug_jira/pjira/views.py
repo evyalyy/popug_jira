@@ -8,8 +8,8 @@ from .forms import AddTaskForm
 from auth_service.models import Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event
-from common.events import AccountCreatedCUD, AccountChangedCUD, AccountRoleChangedCUD
+from common.events import send_event, get_schema_by_name
+from common.events import AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
 from common.events import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
 
 import random
@@ -20,27 +20,38 @@ import threading
 from kafka import KafkaProducer, KafkaConsumer
 
 
-producer = KafkaProducer(bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
+producer = KafkaProducer(client_id='pjira', bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 stop_consumers = False
 
 
 def consume_accounts(js):
-    tp = js['type']
+    meta = js['meta']
+    if meta['version'] != 1:
+        print('[PJIRA][ERROR] wrong version. meta:', meta)
+        return
 
-    if tp == AccountCreatedCUD.__name__:
-        emp = Employee.objects.create(id=js['id'], name=js['name'], roles=js['roles'])
+    sch = get_schema_by_name(1, meta['event_type'])
+
+    errors = sch().validate(js)
+    
+    if len(errors) > 0:
+        print('[PJIRA][ERROR] consume validation errors: {}'.format(errors))
+        return
+
+    if sch == AccountCreatedCUDSchema:
+        emp = Employee.objects.create(id=js['account_id'], name=js['name'], roles=js['roles'])
         emp.save()
-    elif tp == AccountChangedCUD.__name__:
+    elif sch == AccountChangedCUDSchema:
         try:
-            emp = Employee.objects.get(id=js['id'])
+            emp = Employee.objects.get(id=js['account_id'])
             emp.name = js['name']
             emp.save()
         except Employee.DoesNotExist:
             print('[PJIRA][ERROR] account does not exist')
-    elif tp == AccountRoleChangedCUD.__name__:
+    elif sch == AccountRoleChangedCUDSchema:
         try:
-            emp = Employee.objects.get(id=js['id'])
+            emp = Employee.objects.get(id=js['account_id'])
             emp.roles = js['roles']
             emp.save()
         except Employee.DoesNotExist:
@@ -58,7 +69,7 @@ def consumer_func(consumer, func):
                                                   message.offset, message.key,
                                                   message.value))
             js = json.loads(message.value.decode('ascii'))
-            print('[PJIRA] type:', js['type'])
+            print('[PJIRA] type:', js['meta'])
 
             func(js)
 

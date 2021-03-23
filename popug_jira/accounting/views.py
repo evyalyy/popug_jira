@@ -8,8 +8,8 @@ from .models import Task, Employee, Transaction, TransactionKind
 from auth_service.models import Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event
-from common.events import AccountCreatedCUD, AccountChangedCUD, AccountRoleChangedCUD
+from common.events import send_event, get_schema_by_name
+from common.events import AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
 from common.events import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
 
 import random
@@ -30,25 +30,37 @@ stop_consumers = False
 
 
 def consume_accounts(js):
-    tp = js['type']
+    meta = js['meta']
+    if meta['version'] != 1:
+        print('[ACCOUNTING][ERROR] wrong version. meta:', meta)
+        return
 
-    if tp == AccountCreatedCUD.__name__:
-        emp = Employee.objects.create(id=js['id'], name=js['name'], roles=js['roles'])
+    sch = get_schema_by_name(1, meta['event_type'])
+
+    errors = sch().validate(js)
+    
+    if len(errors) > 0:
+        print('[ACCOUNTING][ERROR] consume validation errors: {}'.format(errors))
+        return
+
+    if sch == AccountCreatedCUDSchema:
+        emp = Employee.objects.create(id=js['account_id'], name=js['name'], roles=js['roles'])
         emp.save()
-    elif tp == AccountChangedCUD.__name__:
+    elif sch == AccountChangedCUDSchema:
         try:
-            emp = Employee.objects.get(id=js['id'])
+            emp = Employee.objects.get(id=js['account_id'])
             emp.name = js['name']
             emp.save()
         except Employee.DoesNotExist:
             print('[ACCOUNTING][ERROR] account does not exist')
-    elif tp == AccountRoleChangedCUD.__name__:
+    elif sch == AccountRoleChangedCUDSchema:
         try:
-            emp = Employee.objects.get(id=js['id'])
+            emp = Employee.objects.get(id=js['account_id'])
             emp.roles = js['roles']
             emp.save()
         except Employee.DoesNotExist:
             print('[ACCOUNTING][ERROR] account does not exist')
+
 
 def consume_tasks(js):
     tp = js['type']
@@ -111,7 +123,7 @@ def consumer_func(consumer, func):
                                                   message.offset, message.key,
                                                   message.value))
             js = json.loads(message.value.decode('ascii'))
-            print('[ACCOUNTING] type:', js['type'])
+            print('[ACCOUNTING] type:', js['meta'])
 
             func(js)
 
