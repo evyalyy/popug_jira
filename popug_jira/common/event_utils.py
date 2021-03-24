@@ -1,3 +1,5 @@
+from django.db import OperationalError
+
 from kafka.errors import KafkaError
 import json
 
@@ -55,4 +57,13 @@ def consume_events(consumer, schema_registry, label):
 
             event_body = schema_entry.schema_type(**event.body)
 
-            schema_entry.handler(event_body)
+            consumed = False
+            while not consumed:
+                try:
+                    schema_entry.handler(event_body)
+                except OperationalError:
+                    continue
+                except Exception as e:
+                    print('[{}][ERROR] {}'.format(label, e))
+                    break
+                consumed = True
