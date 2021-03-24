@@ -8,10 +8,11 @@ from .forms import AddTaskForm
 from auth_service.models import Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event, make_event, consume_accounts, consumer_func
-# from common.events import AccountCreatedCUDSchema, AccountChangedCUDSchema, AccountRoleChangedCUDSchema
-from common.events import TaskCreatedBESchema, TaskAssignedBESchema, TaskClosedBESchema
-from common.events import AccountCreatedCUDSchema2, AccountChangedCUDSchema2, register_schema
+from common.event_utils import send_event, consume_events
+from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.schema_registry import SchemaRegistry
+from .event_handlers import *
 
 import random
 import requests
@@ -20,24 +21,14 @@ import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
 
-def AccountCreatedHandler(event):
-    emp = Employee.objects.create(id=event.account_id,
-                                        name=event.name,
-                                        roles=event.roles)
-    emp.save()
 
-def AccountChangedHandler(event):
-    try:
-        emp = Employee.objects.get(id=event.account_id)
-        emp.name = event.name
-        emp.roles = event.roles
-        emp.save()
-    except Employee.DoesNotExist:
-        print('[{}][ERROR] account {} does not exist'.format('pjira', event.account_id))
+registry = SchemaRegistry()
+registry.register(1, AccountCreatedCUD, AccountCreatedHandler)
+registry.register(1, AccountChangedCUD, AccountChangedHandler)
+registry.register(1, TaskCreatedBE)
+registry.register(1, TaskAssignedBE)
+registry.register(1, TaskClosedBE)
 
-
-register_schema(1, AccountCreatedCUDSchema2, AccountCreatedHandler)
-register_schema(1, AccountChangedCUDSchema2, AccountChangedHandler)
 
 producer = KafkaProducer(client_id='pjira_tasks',
                         bootstrap_servers=[settings.KAFKA_HOST],
@@ -46,7 +37,7 @@ producer = KafkaProducer(client_id='pjira_tasks',
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 
 
-thr = threading.Thread(target=consumer_func, args=(accounts_consumer, consume_accounts, 'pjira', Employee))
+thr = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
 thr.start()
 
 
@@ -81,7 +72,7 @@ def add_task(request):
                 # emp = Employee.objects.get(name=form.cleaned_data['assignee'])
                 new_task = Task(description=form.cleaned_data['description'])
                 new_task.save()
-                send_event(producer, 'tasks', 1, TaskCreatedBESchema, make_event(task_id=new_task.id, description=new_task.description))
+                send_event(producer, 'tasks', registry, 1, TaskCreatedBE(task_id=new_task.id, description=new_task.description))
             except Employee.DoesNotExist:
                 error_message = 'Employee {} does not exist'.format(form.cleaned_data['assignee'])
                 return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
@@ -109,7 +100,7 @@ def close_task(request, task_id):
 
         task.status = TaskStatus.CLOSED
         task.save()
-        send_event(producer, 'tasks', 1, TaskClosedBESchema, make_event(task_id=task.id, assignee_id=task.assignee.id))
+        send_event(producer, 'tasks', registry, 1, TaskClosedBE(task_id=task.id, assignee_id=task.assignee.id))
         return HttpResponseRedirect(reverse('pjira:index'))
 
     return HttpResponseServerError("Wrong method")
@@ -124,7 +115,7 @@ def assign_tasks(request):
         for task in open_tasks:
             task.assignee = random.choice(employee_list)
             task.save()
-            send_event(producer, 'tasks', 1, TaskAssignedBESchema, make_event(task_id=task.id, assignee_id=task.assignee.id))
+            send_event(producer, 'tasks', registry, 1, TaskAssignedBE(task_id=task.id, assignee_id=task.assignee.id))
         return HttpResponseRedirect(reverse('pjira:index'))
     else:
         return render(request, 'pjira/assign_tasks.html')

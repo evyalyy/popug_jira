@@ -7,15 +7,20 @@ from .forms import LoginForm, RegisterForm, ChangeAccountForm
 from .models import Employee, Role
 
 from common.authorized_only import authorized_only
-from common.events import make_event, send_event, AccountCreatedCUDSchema, AccountChangedCUDSchema
-from common.events import register_schema
-from common.events import AccountCreatedCUDSchema2, AccountChangedCUDSchema2
+from common.event_utils import send_event
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.schema_registry import SchemaRegistry
 
 import jwt
-
 import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
+
+
+registry = SchemaRegistry()
+registry.register(1, AccountCreatedCUD)
+registry.register(1, AccountChangedCUD)
+
 
 auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
                                       bootstrap_servers=[settings.KAFKA_HOST],
@@ -33,10 +38,8 @@ def update_employee_by_email(email, name, password, roles):
     acc.roles = roles
     acc.save()
 
-    ev2 = AccountChangedCUDSchema2(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
-
-    send_event(auth_service_producer, 'accounts', 1, AccountChangedCUDSchema,
-                make_event(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles), ev2)
+    ev2 = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
 
 
 def create_employee(name, email, password, roles):
@@ -47,9 +50,8 @@ def create_employee(name, email, password, roles):
     emp = Employee.objects.create(name=name, email=email, password=password, roles=roles)
     emp.save()
 
-    ev = make_event(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    ev2 = AccountCreatedCUDSchema2(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(auth_service_producer, 'accounts', 1, AccountCreatedCUDSchema, ev, ev2)
+    ev2 = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
 
 
 def login(request):
