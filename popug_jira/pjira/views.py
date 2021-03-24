@@ -8,9 +8,11 @@ from .forms import AddTaskForm
 from auth_service.models import Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event
-from common.events import AccountCreatedCUD, AccountChangedCUD, AccountRoleChangedCUD
-from common.events import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
+from common.event_utils import send_event, consume_events
+from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.schema_registry import SchemaRegistry
+from .event_handlers import *
 
 import random
 import requests
@@ -20,50 +22,22 @@ import threading
 from kafka import KafkaProducer, KafkaConsumer
 
 
-producer = KafkaProducer(bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
+registry = SchemaRegistry()
+registry.register(1, AccountCreatedCUD, AccountCreatedHandler)
+registry.register(1, AccountChangedCUD, AccountChangedHandler)
+registry.register(1, TaskCreatedBE)
+registry.register(1, TaskAssignedBE)
+registry.register(1, TaskClosedBE)
+
+
+producer = KafkaProducer(client_id='pjira_tasks',
+                        bootstrap_servers=[settings.KAFKA_HOST],
+                        value_serializer=lambda m: json.dumps(m).encode('ascii'))
+
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
-stop_consumers = False
 
 
-def consume_accounts(js):
-    tp = js['type']
-
-    if tp == AccountCreatedCUD.__name__:
-        emp = Employee.objects.create(id=js['id'], name=js['name'], roles=js['roles'])
-        emp.save()
-    elif tp == AccountChangedCUD.__name__:
-        try:
-            emp = Employee.objects.get(id=js['id'])
-            emp.name = js['name']
-            emp.save()
-        except Employee.DoesNotExist:
-            print('[PJIRA][ERROR] account does not exist')
-    elif tp == AccountRoleChangedCUD.__name__:
-        try:
-            emp = Employee.objects.get(id=js['id'])
-            emp.roles = js['roles']
-            emp.save()
-        except Employee.DoesNotExist:
-            print('[PJIRA][ERROR] account does not exist')
-
-
-def consumer_func(consumer, func):
-    global stop_consumers
-    print('[PJIRA] CONSUMERS STARTED')
-    while not stop_consumers:
-        for message in consumer:
-            # message value and key are raw bytes -- decode if necessary!
-            # e.g., for unicode: `message.value.decode('utf-8')`
-            print ("[PJIRA] consumed %s:%d:%d: key=%s value=%s" % (message.topic, message.partition,
-                                                  message.offset, message.key,
-                                                  message.value))
-            js = json.loads(message.value.decode('ascii'))
-            print('[PJIRA] type:', js['type'])
-
-            func(js)
-
-
-thr = threading.Thread(target=consumer_func, args=(accounts_consumer,consume_accounts))
+thr = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
 thr.start()
 
 
@@ -98,7 +72,7 @@ def add_task(request):
                 # emp = Employee.objects.get(name=form.cleaned_data['assignee'])
                 new_task = Task(description=form.cleaned_data['description'])
                 new_task.save()
-                send_event(producer, 'tasks', TaskCreatedBE(id=new_task.id, description=new_task.description))
+                send_event(producer, 'tasks', registry, 1, TaskCreatedBE(task_id=new_task.id, description=new_task.description))
             except Employee.DoesNotExist:
                 error_message = 'Employee {} does not exist'.format(form.cleaned_data['assignee'])
                 return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
@@ -126,7 +100,7 @@ def close_task(request, task_id):
 
         task.status = TaskStatus.CLOSED
         task.save()
-        send_event(producer, 'tasks', TaskClosedBE(id=task.id))
+        send_event(producer, 'tasks', registry, 1, TaskClosedBE(task_id=task.id, assignee_id=task.assignee.id))
         return HttpResponseRedirect(reverse('pjira:index'))
 
     return HttpResponseServerError("Wrong method")
@@ -141,7 +115,7 @@ def assign_tasks(request):
         for task in open_tasks:
             task.assignee = random.choice(employee_list)
             task.save()
-            send_event(producer, 'tasks', TaskAssignedBE(id=task.id, assignee=task.assignee.id))
+            send_event(producer, 'tasks', registry, 1, TaskAssignedBE(task_id=task.id, assignee_id=task.assignee.id))
         return HttpResponseRedirect(reverse('pjira:index'))
     else:
         return render(request, 'pjira/assign_tasks.html')

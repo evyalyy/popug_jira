@@ -7,30 +7,25 @@ from .forms import LoginForm, RegisterForm, ChangeAccountForm
 from .models import Employee, Role
 
 from common.authorized_only import authorized_only
-from common.events import send_event, AccountCreatedCUD, AccountChangedCUD, AccountRoleChangedCUD
+from common.event_utils import send_event
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.schema_registry import SchemaRegistry
 
 import jwt
-
 import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
 
-producer = KafkaProducer(bootstrap_servers=[settings.KAFKA_HOST], value_serializer=lambda m: json.dumps(m).encode('ascii'))
-# consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
-# stop_consumers = False
 
-# def consumer_func():
-#     global stop_consumers
-#     print('[AUTH] CONSUMERS STARTED')
-#     while not stop_consumers:
-#         for message in consumer:
-#             # message value and key are raw bytes -- decode if necessary!
-#             # e.g., for unicode: `message.value.decode('utf-8')`
-#             print ("[AUTH] consumed %s:%d:%d: key=%s value=%s" % (message.topic, message.partition,
-#                                                   message.offset, message.key,
-#                                                   message.value))
-# thr = threading.Thread(target=consumer_func)
-# thr.start()
+registry = SchemaRegistry()
+registry.register(1, AccountCreatedCUD)
+registry.register(1, AccountChangedCUD)
+
+
+auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
+                                      bootstrap_servers=[settings.KAFKA_HOST],
+                                      value_serializer=lambda m: json.dumps(m).encode('ascii'))
+
 
 def update_employee_by_email(email, name, password, roles):
     try:
@@ -38,32 +33,25 @@ def update_employee_by_email(email, name, password, roles):
     except Employee.DoesNotExist:
         raise Http404("Account does not exist")
 
-    roles_changed_event = None
-    if acc.roles != roles:
-        roles_changed_event = AccountRoleChangedCUD(id=acc.id, roles=roles)
-
     acc.name = name
     acc.password = password
     acc.roles = roles
     acc.save()
 
-    event = AccountChangedCUD(id=acc.id, name=acc.name, email=acc.email)
-    send_event(producer, 'accounts', event)
-
-    if roles_changed_event:
-        send_event(producer, 'accounts', roles_changed_event)
+    ev2 = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
 
 
-def create_employee(name, email, password):
+def create_employee(name, email, password, roles):
     emp_list = Employee.objects.filter(email=email)
     if len(emp_list) != 0:
         raise ValueError('Email already registered')
 
-    emp = Employee.objects.create(name=name, email=email, password=password, roles=[Role.EMPLOYEE])
+    emp = Employee.objects.create(name=name, email=email, password=password, roles=roles)
     emp.save()
 
-    event = AccountCreatedCUD(id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(producer, 'accounts', event)
+    ev2 = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
 
 
 def login(request):
@@ -113,11 +101,12 @@ def register(request):
                 email = form.cleaned_data['email']
                 password = form.cleaned_data['password']
                 repeat_password = form.cleaned_data['repeat_password']
+                roles = [int(role) for role in form.cleaned_data['roles']]
 
                 if password != repeat_password:
                     raise ValueError('Passwords do not match')
 
-                create_employee(name, email, password)
+                create_employee(name, email, password, roles)
 
             except Exception as e:
                 error_message = str(e)
