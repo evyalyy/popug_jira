@@ -8,7 +8,7 @@ from .models import Employee, Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event
-from common.events.cud import AccountCreatedCUD, AccountChangedCUD, AccountCreatedCUDv2, AccountChangedCUDv2
+from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 
 import jwt
@@ -18,9 +18,6 @@ from kafka import KafkaProducer, KafkaConsumer
 
 
 registry = SchemaRegistry()
-registry.register(1, AccountCreatedCUD)
-registry.register(1, AccountChangedCUD)
-
 registry.register(2, AccountCreatedCUDv2)
 registry.register(2, AccountChangedCUDv2)
 
