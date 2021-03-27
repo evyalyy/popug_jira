@@ -20,6 +20,23 @@ def AccountChangedHandler(event):
     emp.save()
 
 
+def AccountCreatedHandlerV2(event):
+    emp = Employee.objects.create(id=event.account_id,
+                                        name=event.name,
+                                        email=event.email,
+                                        roles=event.roles)
+    emp.save()
+
+
+def AccountChangedHandlerV2(event):
+
+    emp = Employee.objects.get(id=event.account_id)
+    emp.name = event.name
+    emp.email = event.email
+    emp.roles = event.roles
+    emp.save()
+
+
 def TaskCreatedHandler(event):
     cost_assign = random.randint(10, 20)
     cost_close = random.randint(20, 40)

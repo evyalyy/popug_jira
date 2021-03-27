@@ -2,9 +2,11 @@ from django.db import models
 
 from auth_service.models import Role
 
+
 class TaskStatus(models.IntegerChoices):
     OPEN = 1, 'OPEN'
     CLOSED = 2, 'CLOSED'
+
 
 class Employee(models.Model):
     name = models.CharField(max_length=200)

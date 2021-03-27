@@ -11,7 +11,7 @@ from auth_service.models import Role
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
 from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
-from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD, AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 
@@ -28,6 +28,10 @@ from kafka import KafkaProducer, KafkaConsumer
 registry = SchemaRegistry()
 registry.register(1, AccountCreatedCUD, AccountCreatedHandler)
 registry.register(1, AccountChangedCUD, AccountChangedHandler)
+
+registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
+registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
+
 registry.register(1, TaskCreatedBE, TaskCreatedHandler)
 registry.register(1, TaskAssignedBE, TaskAssignedHandler)
 registry.register(1, TaskClosedBE, TaskClosedHandler)
