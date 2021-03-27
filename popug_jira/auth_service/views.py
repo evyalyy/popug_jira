@@ -8,7 +8,7 @@ from .models import Employee, Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event
-from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.events.cud import AccountCreatedCUD, AccountChangedCUD, AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 
 import jwt
@@ -20,6 +20,9 @@ from kafka import KafkaProducer, KafkaConsumer
 registry = SchemaRegistry()
 registry.register(1, AccountCreatedCUD)
 registry.register(1, AccountChangedCUD)
+
+registry.register(2, AccountCreatedCUDv2)
+registry.register(2, AccountChangedCUDv2)
 
 
 auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
@@ -40,9 +43,15 @@ def update_employee_by_email(email, name, password, roles, phone_number, slack_i
     acc.slack_id = slack_id
     acc.save()
 
-    ev2 = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
-
+    event = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, event)
+    eventV2 = AccountChangedCUDv2(account_id=acc.id,
+                                  name=acc.name,
+                                  email=acc.email,
+                                  roles=acc.roles,
+                                  phone_number=acc.phone_number,
+                                  slack_id=acc.slack_id)
+    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
 def create_employee(name, email, password, roles, phone_number, slack_id):
     emp_list = Employee.objects.filter(email=email)
@@ -57,8 +66,15 @@ def create_employee(name, email, password, roles, phone_number, slack_id):
                                   slack_id=slack_id)
     emp.save()
 
-    ev2 = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
+    event = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
+    send_event(auth_service_producer, 'accounts', registry, 1, event)
+    eventV2 = AccountCreatedCUDv2(account_id=emp.id,
+                                  name=emp.name,
+                                  email=emp.email,
+                                  roles=emp.roles,
+                                  phone_number=emp.phone_number,
+                                  slack_id=emp.slack_id)
+    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
 
 def login(request):
