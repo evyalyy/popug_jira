@@ -43,8 +43,6 @@ def update_employee_by_email(email, name, password, roles, phone_number, slack_i
     acc.slack_id = slack_id
     acc.save()
 
-    event = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, event)
     eventV2 = AccountChangedCUDv2(account_id=acc.id,
                                   name=acc.name,
                                   email=acc.email,
@@ -66,8 +64,6 @@ def create_employee(name, email, password, roles, phone_number, slack_id):
                                   slack_id=slack_id)
     emp.save()
 
-    event = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, event)
     eventV2 = AccountCreatedCUDv2(account_id=emp.id,
                                   name=emp.name,
                                   email=emp.email,
