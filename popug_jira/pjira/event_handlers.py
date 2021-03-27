@@ -1,4 +1,4 @@
-from .models import Employee
+from .models import Employee, Task
 
 
 def AccountCreatedHandlerV2(event):
@@ -20,3 +20,14 @@ def AccountChangedHandlerV2(event):
     emp.slack_id = event.slack_id
     emp.roles = event.roles
     emp.save()
+
+def TaskAssignedHandler(event):
+    emp = Employee.objects.get(id=event.assignee_id)
+    task = Task.objects.get(id=event.task_id)
+    text = 'Task `{}` was assigned to you'.format(task.description)
+    if emp.email:
+        print('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))
+    if emp.phone_number:
+        print('[NOTIFICATION: sms] To: {}, text: "{}"'.format(emp.phone_number, text))
+    if emp.slack_id:
+        print('[NOTIFICATION: slack] To: {}, text: "{}"'.format(emp.slack_id, text))

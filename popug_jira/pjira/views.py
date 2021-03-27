@@ -27,7 +27,7 @@ registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
 registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
 
 registry.register(1, TaskCreatedBE)
-registry.register(1, TaskAssignedBE)
+registry.register(1, TaskAssignedBE, TaskAssignedHandler)
 registry.register(1, TaskClosedBE)
 
 
@@ -36,11 +36,13 @@ producer = KafkaProducer(client_id='pjira_tasks',
                         value_serializer=lambda m: json.dumps(m).encode('ascii'))
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
+tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
 
 
-thr = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
-thr.start()
-
+thr1 = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
+thr1.start()
+thr2 = threading.Thread(target=consume_events, args=(tasks_consumer, registry, 'pjira'))
+thr2.start()
 
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def index(request):

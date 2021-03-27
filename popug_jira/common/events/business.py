@@ -11,3 +11,7 @@ class TaskAssignedBE(BaseModel):
 class TaskClosedBE(BaseModel):
     task_id: int
     assignee_id: int
+
+class DailyPayOffBE(BaseModel):
+    account_id: int
+    amount: int

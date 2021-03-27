@@ -62,3 +62,9 @@ def TaskClosedHandler(event):
 
         emp.wallet += tr.plus
         emp.save()
+
+def DailyPayOffHandler(event):
+    emp = Employee.objects.get(id=event.account_id)
+    text = 'Hello, {}, UberPopug inc. sent you money for today: {}'.format(emp.name, event.amount)
+    if emp.email:
+        print('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))

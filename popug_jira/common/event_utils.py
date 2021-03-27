@@ -54,11 +54,14 @@ def consume_events(consumer, schema_registry, label):
 
             event = Event(**parsed_message)
             schema_entry = schema_registry.get_schema_from_meta(event.meta)
-
-            event_body = schema_entry.schema_type(**event.body)
+            try:
+                event_body = schema_entry.schema_type(**event.body)
+            except KeyError as e:
+                print('[{}][WARNING] event ignored: {}'.format(label, str(e)))
+                continue
 
             consumed = False
-            while not consumed:
+            while not consumed and schema_entry.handler:
                 try:
                     schema_entry.handler(event_body)
                 except OperationalError:

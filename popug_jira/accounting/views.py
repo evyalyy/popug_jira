@@ -10,7 +10,7 @@ from auth_service.models import Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
-from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
+from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE, DailyPayOffBE
 from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
@@ -32,6 +32,7 @@ registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
 registry.register(1, TaskCreatedBE, TaskCreatedHandler)
 registry.register(1, TaskAssignedBE, TaskAssignedHandler)
 registry.register(1, TaskClosedBE, TaskClosedHandler)
+registry.register(1, DailyPayOffBE, DailyPayOffHandler)
 
 
 producer = KafkaProducer(client_id='accounting_transactions',
@@ -40,6 +41,7 @@ producer = KafkaProducer(client_id='accounting_transactions',
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
+transactions_consumer = KafkaConsumer('transactions', bootstrap_servers=[settings.KAFKA_HOST])
 
 
 def run_at_end_of_day():
@@ -63,6 +65,8 @@ def run_at_end_of_day():
                         emp.wallet = 0
                         emp.save()
 
+                        send_event(producer, 'transactions', registry, 1, DailyPayOffBE(account_id=emp.id, amount=tr.minus))
+
         last_eod_time = now
         time.sleep(10)
 
@@ -73,16 +77,24 @@ thr2 = threading.Thread(target=consume_events, args=(tasks_consumer, registry, '
 thr2.start()
 thr3 = threading.Thread(target=run_at_end_of_day)
 thr3.start()
+thr4 = threading.Thread(target=consume_events, args=(transactions_consumer, registry, 'accounting'))
+thr4.start()
 
 
 @authorized_only(model=Employee, allowed_roles=[Role.ADMIN, Role.BUH])
 def index(request):
     employees = Employee.objects.all()
     now = datetime.now()
-    transactions = Transaction.objects.filter(ts__year=now.year, ts__month=now.month, ts__day=now.day).exclude(kind=TransactionKind.DAILY_PAYMENT)
+
+    transactions = Transaction.objects.filter(ts__year=now.year,
+                                              ts__month=now.month,
+                                              ts__day=now.day).exclude(kind=TransactionKind.DAILY_PAYMENT)
+
     total = 0
     for tr in transactions:
         total += tr.plus - tr.minus
+    total *= -1
+
     return render(request, 'accounting/index.html', {'employees': employees, 'total': total})
 
 
