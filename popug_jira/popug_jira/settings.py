@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'pjira.apps.PjiraConfig',
     'auth_service.apps.AuthServiceConfig',
     'accounting.apps.AccountingConfig',
+    'analytics.apps.AnalyticsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

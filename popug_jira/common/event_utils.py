@@ -21,22 +21,22 @@ class Event(BaseModel):
 def send_event(producer, topic, schema_registry, version, event):
 
     if not schema_registry.has_registered_schema(version, event):
-        print('ERROR, schema version {} for event {} not registered'.format(version, event))
+        print('[{}] ERROR, schema version {} for event {} not registered'.format(producer.config['client_id'], version, event))
         return
 
     meta = EventMeta(version=version, event_type=event.__class__.__name__, producer=producer.config['client_id'])
     event_to_send = Event(meta=meta, body=event)
-    print('EVENT JSON:', event_to_send.json())
+    print('[{}] EVENT JSON: {}'.format(meta.producer,event_to_send.json()))
 
     future = producer.send(topic, event_to_send.json())
     try:
         record_metadata = future.get(timeout=10)
     except KafkaError as e:
-        print('Error when sending event:', e)
+        print('[{}] Error when sending event: {}'.format(meta.producer,str(e)))
         return
 
     # Successful result returns assigned partition and offset
-    print('[EVENT] sent event to topic `{}`, partition: {}, offset: {}'.format(
+    print('[{}] sent event to topic `{}`, partition: {}, offset: {}'.format(meta.producer,
             record_metadata.topic, record_metadata.partition, record_metadata.offset))
 
 
@@ -50,11 +50,11 @@ def consume_events(consumer, schema_registry, label):
                                                   message.offset, message.key,
                                                   message.value))
 
-            parsed_message = json.loads(json.loads(message.value.decode('ascii')))
+            parsed_message = json.loads(message.value.decode('ascii'))
 
             event = Event(**parsed_message)
-            schema_entry = schema_registry.get_schema_from_meta(event.meta)
             try:
+                schema_entry = schema_registry.get_schema_from_meta(event.meta)
                 event_body = schema_entry.schema_type(**event.body)
             except KeyError as e:
                 print('[{}][WARNING] event ignored: {}'.format(label, str(e)))

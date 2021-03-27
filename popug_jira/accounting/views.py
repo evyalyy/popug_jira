@@ -10,34 +10,39 @@ from auth_service.models import Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
-from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE, DailyPayOffBE
-from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
+from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE, DailyPaymentCompleted
+from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2, TransactionCreated, TaskCostAssigned
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 
 import random
 import requests
 import jwt
-import json
 import threading
 from datetime import datetime
 import time
 from kafka import KafkaProducer, KafkaConsumer
 
 
+producer_transactions = KafkaProducer(client_id='accounting_transactions',
+                         bootstrap_servers=[settings.KAFKA_HOST],
+                         value_serializer=lambda m: m.encode('ascii'))
+
+producer_tasks = KafkaProducer(client_id='accounting_tasks',
+                         bootstrap_servers=[settings.KAFKA_HOST],
+                         value_serializer=lambda m: m.encode('ascii'))
+
 registry = SchemaRegistry()
 registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
 registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
 
-registry.register(1, TaskCreatedBE, TaskCreatedHandler)
-registry.register(1, TaskAssignedBE, TaskAssignedHandler)
-registry.register(1, TaskClosedBE, TaskClosedHandler)
-registry.register(1, DailyPayOffBE, DailyPayOffHandler)
+registry.register(1, TaskCreatedBE, lambda event: TaskCreatedHandler(event, producer_tasks, 'tasks', registry, 1))
+registry.register(1, TaskAssignedBE, lambda event: TaskAssignedHandler(event, producer_transactions, 'transactions', registry, 1))
+registry.register(1, TaskClosedBE, lambda event: TaskClosedHandler(event, producer_transactions, 'transactions', registry, 1))
+registry.register(1, DailyPaymentCompleted, DailyPaymentCompletedHandler)
+registry.register(1, TaskCostAssigned)
+registry.register(1, TransactionCreated)
 
-
-producer = KafkaProducer(client_id='accounting_transactions',
-                         bootstrap_servers=[settings.KAFKA_HOST],
-                         value_serializer=lambda m: json.dumps(m).encode('ascii'))
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
@@ -46,10 +51,9 @@ transactions_consumer = KafkaConsumer('transactions', bootstrap_servers=[setting
 
 def run_at_end_of_day():
     last_eod_time = datetime.now()
-    print('run_at_end_of_day started at', last_eod_time)
     while True:
         now = datetime.now()
-        if now.minute != last_eod_time.minute:
+        if now.minute != last_eod_time.minute: # FIXME: payoff every minute, not day
             print('END OF DAY')
             employees = Employee.objects.all()
             for emp in employees:
@@ -65,7 +69,9 @@ def run_at_end_of_day():
                         emp.wallet = 0
                         emp.save()
 
-                        send_event(producer, 'transactions', registry, 1, DailyPayOffBE(account_id=emp.id, amount=tr.minus))
+                        send_event(producer_transactions, 'transactions', registry, 1, DailyPaymentCompleted(account_id=emp.id,
+                                                                                                             amount=tr.minus,
+                                                                                                             ts=datetime.now()))
 
         last_eod_time = now
         time.sleep(10)

@@ -21,5 +21,6 @@ urlpatterns = [
     path('pjira/', include('pjira.urls')),
     path('auth/', include('auth_service.urls')),
     path('accounting/', include('accounting.urls')),
+    path('analytics/', include('analytics.urls')),
     path('admin/', admin.site.urls)
 ]

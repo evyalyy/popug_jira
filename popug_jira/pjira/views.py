@@ -17,8 +17,8 @@ from .event_handlers import *
 import random
 import requests
 import jwt
-import json
 import threading
+from datetime import datetime
 from kafka import KafkaProducer, KafkaConsumer
 
 
@@ -33,7 +33,7 @@ registry.register(1, TaskClosedBE)
 
 producer = KafkaProducer(client_id='pjira_tasks',
                         bootstrap_servers=[settings.KAFKA_HOST],
-                        value_serializer=lambda m: json.dumps(m).encode('ascii'))
+                        value_serializer=lambda m: m.encode('ascii'))
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
 tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
@@ -95,6 +95,9 @@ def close_task(request, task_id):
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
             raise Http404("Task does not exist")
+
+        if task.assignee is None:
+            return HttpResponseServerError('Cannot close not assigned task')
 
         decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
         my_id = decoded['id']

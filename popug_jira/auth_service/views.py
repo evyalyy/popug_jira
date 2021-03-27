@@ -12,7 +12,6 @@ from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 
 import jwt
-import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
 
@@ -24,7 +23,7 @@ registry.register(2, AccountChangedCUDv2)
 
 auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
                                       bootstrap_servers=[settings.KAFKA_HOST],
-                                      value_serializer=lambda m: json.dumps(m).encode('ascii'))
+                                      value_serializer=lambda m: m.encode('ascii'))
 
 
 def update_employee_by_email(email, name, password, roles, phone_number, slack_id):
