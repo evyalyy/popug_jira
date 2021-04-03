@@ -10,36 +10,39 @@ from auth_service.models import Role
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
 from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
-from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 
 import random
 import requests
 import jwt
-import json
 import threading
+from datetime import datetime
 from kafka import KafkaProducer, KafkaConsumer
 
 
 registry = SchemaRegistry()
-registry.register(1, AccountCreatedCUD, AccountCreatedHandler)
-registry.register(1, AccountChangedCUD, AccountChangedHandler)
+registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
+registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
+
 registry.register(1, TaskCreatedBE)
-registry.register(1, TaskAssignedBE)
+registry.register(1, TaskAssignedBE, TaskAssignedHandler)
 registry.register(1, TaskClosedBE)
 
 
 producer = KafkaProducer(client_id='pjira_tasks',
                         bootstrap_servers=[settings.KAFKA_HOST],
-                        value_serializer=lambda m: json.dumps(m).encode('ascii'))
+                        value_serializer=lambda m: m.encode('ascii'))
 
 accounts_consumer = KafkaConsumer('accounts', bootstrap_servers=[settings.KAFKA_HOST])
+tasks_consumer = KafkaConsumer('tasks', bootstrap_servers=[settings.KAFKA_HOST])
 
 
-thr = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
-thr.start()
-
+thr1 = threading.Thread(target=consume_events, args=(accounts_consumer, registry, 'pjira'))
+thr1.start()
+thr2 = threading.Thread(target=consume_events, args=(tasks_consumer, registry, 'pjira'))
+thr2.start()
 
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def index(request):
@@ -92,6 +95,9 @@ def close_task(request, task_id):
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
             raise Http404("Task does not exist")
+
+        if task.assignee is None:
+            return HttpResponseServerError('Cannot close not assigned task')
 
         decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
         my_id = decoded['id']

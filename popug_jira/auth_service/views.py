@@ -8,26 +8,25 @@ from .models import Employee, Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event
-from common.events.cud import AccountCreatedCUD, AccountChangedCUD
+from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
 from common.schema_registry import SchemaRegistry
 
 import jwt
-import json
 import threading
 from kafka import KafkaProducer, KafkaConsumer
 
 
 registry = SchemaRegistry()
-registry.register(1, AccountCreatedCUD)
-registry.register(1, AccountChangedCUD)
+registry.register(2, AccountCreatedCUDv2)
+registry.register(2, AccountChangedCUDv2)
 
 
 auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
                                       bootstrap_servers=[settings.KAFKA_HOST],
-                                      value_serializer=lambda m: json.dumps(m).encode('ascii'))
+                                      value_serializer=lambda m: m.encode('ascii'))
 
 
-def update_employee_by_email(email, name, password, roles):
+def update_employee_by_email(email, name, password, roles, phone_number, slack_id):
     try:
         acc = Employee.objects.get(email=email)
     except Employee.DoesNotExist:
@@ -36,22 +35,38 @@ def update_employee_by_email(email, name, password, roles):
     acc.name = name
     acc.password = password
     acc.roles = roles
+    acc.phone_number = phone_number
+    acc.slack_id = slack_id
     acc.save()
 
-    ev2 = AccountChangedCUD(account_id=acc.id, name=acc.name, email=acc.email, roles=acc.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
+    eventV2 = AccountChangedCUDv2(account_id=acc.id,
+                                  name=acc.name,
+                                  email=acc.email,
+                                  roles=acc.roles,
+                                  phone_number=acc.phone_number,
+                                  slack_id=acc.slack_id)
+    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
-
-def create_employee(name, email, password, roles):
+def create_employee(name, email, password, roles, phone_number, slack_id):
     emp_list = Employee.objects.filter(email=email)
     if len(emp_list) != 0:
         raise ValueError('Email already registered')
 
-    emp = Employee.objects.create(name=name, email=email, password=password, roles=roles)
+    emp = Employee.objects.create(name=name,
+                                  email=email,
+                                  password=password,
+                                  roles=roles,
+                                  phone_number=phone_number,
+                                  slack_id=slack_id)
     emp.save()
 
-    ev2 = AccountCreatedCUD(account_id=emp.id, name=emp.name, email=emp.email, roles=emp.roles)
-    send_event(auth_service_producer, 'accounts', registry, 1, ev2)
+    eventV2 = AccountCreatedCUDv2(account_id=emp.id,
+                                  name=emp.name,
+                                  email=emp.email,
+                                  roles=emp.roles,
+                                  phone_number=emp.phone_number,
+                                  slack_id=emp.slack_id)
+    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
 
 def login(request):
@@ -102,11 +117,13 @@ def register(request):
                 password = form.cleaned_data['password']
                 repeat_password = form.cleaned_data['repeat_password']
                 roles = [int(role) for role in form.cleaned_data['roles']]
+                phone_number = form.cleaned_data['phone_number']
+                slack_id = form.cleaned_data['slack_id']
 
                 if password != repeat_password:
                     raise ValueError('Passwords do not match')
 
-                create_employee(name, email, password, roles)
+                create_employee(name, email, password, roles, phone_number, slack_id)
 
             except Exception as e:
                 error_message = str(e)
@@ -135,7 +152,12 @@ def change_account(request, account_id):
             acc = Employee.objects.get(id=account_id)
         except Employee.DoesNotExist:
             raise Http404("Account does not exist")
-        form = ChangeAccountForm(initial={'name':acc.name, 'email':acc.email, 'password':acc.password, 'roles':acc.roles})
+        form = ChangeAccountForm(initial={'name':acc.name,
+                                          'email':acc.email,
+                                          'password':acc.password,
+                                          'roles':acc.roles,
+                                          'phone_number':acc.phone_number,
+                                          'slack_id': acc.slack_id})
         return render(request, 'auth_service/change_account.html', {'form': form, 'error_message': error_message})
 
     raise HttpResponseServerError("Wrong method")
@@ -156,8 +178,10 @@ def save_account_changes(request):
                 email = form.cleaned_data['email']
                 password = form.cleaned_data['password']
                 roles = [int(role) for role in form.cleaned_data['roles']]
+                phone_number = form.cleaned_data['phone_number']
+                slack_id = form.cleaned_data['slack_id']
 
-                update_employee_by_email(email, name, password, roles)
+                update_employee_by_email(email, name, password, roles, phone_number, slack_id)
 
                 return HttpResponseRedirect(reverse('auth_service:admin_list'))
                 

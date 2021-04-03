@@ -1,0 +1,18 @@
+<h1>Today managers earned</h1>
+
+<p>Total: {{total_minus}}</p>
+
+<p>By employee:</p>
+{% if minus_by_employee %}
+    <ul>
+    {% for v in minus_by_employee %}
+        <li>{{ v.name }} owes {{v.amount}}</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>No employees.</p>
+{% endif %}
+
+<p>{{most_expensive_today.human_readable}}</p>
+<p>{{most_expensive_last_week.human_readable}}</p>
+<p>{{most_expensive_last_month.human_readable}}</p>

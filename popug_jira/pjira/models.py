@@ -2,13 +2,18 @@ from django.db import models
 
 from auth_service.models import Role
 
+
 class TaskStatus(models.IntegerChoices):
     OPEN = 1, 'OPEN'
     CLOSED = 2, 'CLOSED'
 
+
 class Employee(models.Model):
     name = models.CharField(max_length=200)
     roles = models.JSONField(default=list)
+    email = models.EmailField(blank=True, null=True)
+    phone_number = models.CharField(max_length=17, blank=True, null=True)
+    slack_id = models.CharField(max_length=200, blank=True, null=True)
 
     def __str__(self):
         return '{}, roles: {}'.format(self.name, ','.join([Role(r).label for r in self.roles]))
