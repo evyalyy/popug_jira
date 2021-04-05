@@ -15,7 +15,7 @@ def authorized_only(model, allowed_roles):
             decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
 
             try:
-                emp = model.objects.get(id=decoded['id'])
+                emp = model.objects.get(public_id=decoded['id'])
             except model.DoesNotExist:
                 return HttpResponse('[AUTH] account not found', status=404)
 

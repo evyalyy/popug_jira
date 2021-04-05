@@ -39,7 +39,7 @@ def update_employee_by_email(email, name, password, roles, phone_number, slack_i
     acc.slack_id = slack_id
     acc.save()
 
-    eventV2 = AccountChangedCUDv2(account_id=acc.id,
+    eventV2 = AccountChangedCUDv2(account_public_id=str(acc.public_id),
                                   name=acc.name,
                                   email=acc.email,
                                   roles=acc.roles,
@@ -60,7 +60,7 @@ def create_employee(name, email, password, roles, phone_number, slack_id):
                                   slack_id=slack_id)
     emp.save()
 
-    eventV2 = AccountCreatedCUDv2(account_id=emp.id,
+    eventV2 = AccountCreatedCUDv2(account_public_id=str(emp.public_id),
                                   name=emp.name,
                                   email=emp.email,
                                   roles=emp.roles,
@@ -87,7 +87,9 @@ def login(request):
                 if emp.password != password:
                     raise ValueError('Password incorrect')
 
-                encoded_jwt = jwt.encode({'id': emp.id, 'email': emp.email, 'roles': emp.roles}, settings.SECRET_KEY, algorithm=settings.JWT_ALGO)
+                encoded_jwt = jwt.encode({'id': str(emp.public_id),
+                                          'email': emp.email,
+                                          'roles': emp.roles}, settings.SECRET_KEY, algorithm=settings.JWT_ALGO)
                 resp.set_cookie('jwt', encoded_jwt)
             except Exception as e:
                 error_message = str(e)

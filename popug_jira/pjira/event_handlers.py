@@ -2,7 +2,7 @@ from .models import Employee, Task
 
 
 def AccountCreatedHandlerV2(event):
-    emp = Employee.objects.create(id=event.account_id,
+    emp = Employee.objects.create(public_id=event.account_public_id,
                                         name=event.name,
                                         email=event.email,
                                         phone_number=event.phone_number,
@@ -13,7 +13,7 @@ def AccountCreatedHandlerV2(event):
 
 def AccountChangedHandlerV2(event):
 
-    emp = Employee.objects.get(id=event.account_id)
+    emp = Employee.objects.get(public_id=event.account_public_id)
     emp.name = event.name
     emp.email = event.email
     emp.phone_number = event.phone_number
@@ -22,8 +22,8 @@ def AccountChangedHandlerV2(event):
     emp.save()
 
 def TaskAssignedHandler(event):
-    emp = Employee.objects.get(id=event.assignee_id)
-    task = Task.objects.get(id=event.task_id)
+    emp = Employee.objects.get(public_id=event.assignee_public_id)
+    task = Task.objects.get(public_id=event.task_public_id)
     text = 'Task `{}` was assigned to you'.format(task.description)
     if emp.email:
         print('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))

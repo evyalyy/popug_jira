@@ -75,7 +75,7 @@ def add_task(request):
                 # emp = Employee.objects.get(name=form.cleaned_data['assignee'])
                 new_task = Task(description=form.cleaned_data['description'])
                 new_task.save()
-                send_event(producer, 'tasks', registry, 1, TaskCreatedBE(task_id=new_task.id, description=new_task.description))
+                send_event(producer, 'tasks', registry, 1, TaskCreatedBE(task_public_id=str(new_task.public_id), description=new_task.description))
             except Employee.DoesNotExist:
                 error_message = 'Employee {} does not exist'.format(form.cleaned_data['assignee'])
                 return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
@@ -101,12 +101,12 @@ def close_task(request, task_id):
 
         decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
         my_id = decoded['id']
-        if my_id != task.assignee.id:
+        if my_id != str(task.assignee.public_id):
             return HttpResponseServerError('You cannot close task not assigned to you')
 
         task.status = TaskStatus.CLOSED
         task.save()
-        send_event(producer, 'tasks', registry, 1, TaskClosedBE(task_id=task.id, assignee_id=task.assignee.id))
+        send_event(producer, 'tasks', registry, 1, TaskClosedBE(task_public_id=str(task.public_id), assignee_public_id=str(task.assignee.public_id)))
         return HttpResponseRedirect(reverse('pjira:index'))
 
     return HttpResponseServerError("Wrong method")
@@ -121,7 +121,8 @@ def assign_tasks(request):
         for task in open_tasks:
             task.assignee = random.choice(employee_list)
             task.save()
-            send_event(producer, 'tasks', registry, 1, TaskAssignedBE(task_id=task.id, assignee_id=task.assignee.id))
+            send_event(producer, 'tasks', registry, 1, TaskAssignedBE(task_public_id=str(task.public_id),
+                                                                      assignee_public_id=str(task.assignee.public_id)))
         return HttpResponseRedirect(reverse('pjira:index'))
     else:
         return render(request, 'pjira/assign_tasks.html')

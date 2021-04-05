@@ -69,7 +69,7 @@ def run_at_end_of_day():
                         emp.wallet = 0
                         emp.save()
 
-                        send_event(producer_transactions, 'transactions', registry, 1, DailyPaymentCompleted(account_id=emp.id,
+                        send_event(producer_transactions, 'transactions', registry, 1, DailyPaymentCompleted(account_public_id=emp.public_id,
                                                                                                              amount=tr.minus,
                                                                                                              ts=datetime.now()))
 
