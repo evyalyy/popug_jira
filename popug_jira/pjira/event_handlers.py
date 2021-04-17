@@ -1,4 +1,7 @@
 from .models import Employee, Task
+import logging
+
+logger = logging.getLogger('root')
 
 
 def AccountCreatedHandlerV2(event):
@@ -26,8 +29,8 @@ def TaskAssignedHandler(event):
     task = Task.objects.get(public_id=event.task_public_id)
     text = 'Task `{}` was assigned to you'.format(task.description)
     if emp.email:
-        print('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))
+        logger.info('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))
     if emp.phone_number:
-        print('[NOTIFICATION: sms] To: {}, text: "{}"'.format(emp.phone_number, text))
+        logger.info('[NOTIFICATION: sms] To: {}, text: "{}"'.format(emp.phone_number, text))
     if emp.slack_id:
-        print('[NOTIFICATION: slack] To: {}, text: "{}"'.format(emp.slack_id, text))
+        logger.info('[NOTIFICATION: slack] To: {}, text: "{}"'.format(emp.slack_id, text))

@@ -2,17 +2,17 @@ from pydantic import BaseModel
 from datetime import datetime
 
 
-class TaskCreatedBE(BaseModel):
+class TaskCreated(BaseModel):
     task_public_id: str
     description: str
 
 
-class TaskAssignedBE(BaseModel):
+class TaskAssigned(BaseModel):
     task_public_id: str
     assignee_public_id: str
 
 
-class TaskClosedBE(BaseModel):
+class TaskClosed(BaseModel):
     task_public_id: str
     assignee_public_id: str
 

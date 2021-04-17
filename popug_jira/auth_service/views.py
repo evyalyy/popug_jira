@@ -2,14 +2,18 @@ from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect, HttpResponseServerError, Http404
 from django.urls import reverse
 from django.conf import settings
+from django.db import transaction
 
 from .forms import LoginForm, RegisterForm, ChangeAccountForm
 from .models import Employee, Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event
-from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
+from common.events.cud import AccountCreatedv2, AccountChangedv2
 from common.schema_registry import SchemaRegistry
+
+import logging
+logger = logging.getLogger('root')
 
 import jwt
 import threading
@@ -17,8 +21,8 @@ from kafka import KafkaProducer, KafkaConsumer
 
 
 registry = SchemaRegistry()
-registry.register(2, AccountCreatedCUDv2)
-registry.register(2, AccountChangedCUDv2)
+registry.register(2, AccountCreatedv2)
+registry.register(2, AccountChangedv2)
 
 
 auth_service_producer = KafkaProducer(client_id='auth_service_accounts',
@@ -32,41 +36,43 @@ def update_employee_by_email(email, name, password, roles, phone_number, slack_i
     except Employee.DoesNotExist:
         raise Http404("Account does not exist")
 
-    acc.name = name
-    acc.password = password
-    acc.roles = roles
-    acc.phone_number = phone_number
-    acc.slack_id = slack_id
-    acc.save()
+    with transaction.atomic():
+        acc.name = name
+        acc.password = password
+        acc.roles = roles
+        acc.phone_number = phone_number
+        acc.slack_id = slack_id
+        acc.save()
 
-    eventV2 = AccountChangedCUDv2(account_public_id=str(acc.public_id),
-                                  name=acc.name,
-                                  email=acc.email,
-                                  roles=acc.roles,
-                                  phone_number=acc.phone_number,
-                                  slack_id=acc.slack_id)
-    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
+        eventV2 = AccountChangedv2(account_public_id=str(acc.public_id),
+                                      name=acc.name,
+                                      email=acc.email,
+                                      roles=acc.roles,
+                                      phone_number=acc.phone_number,
+                                      slack_id=acc.slack_id)
+        send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
 def create_employee(name, email, password, roles, phone_number, slack_id):
     emp_list = Employee.objects.filter(email=email)
     if len(emp_list) != 0:
         raise ValueError('Email already registered')
 
-    emp = Employee.objects.create(name=name,
-                                  email=email,
-                                  password=password,
-                                  roles=roles,
-                                  phone_number=phone_number,
-                                  slack_id=slack_id)
-    emp.save()
+    with transaction.atomic():
+        emp = Employee.objects.create(name=name,
+                                      email=email,
+                                      password=password,
+                                      roles=roles,
+                                      phone_number=phone_number,
+                                      slack_id=slack_id)
+        emp.save()
 
-    eventV2 = AccountCreatedCUDv2(account_public_id=str(emp.public_id),
-                                  name=emp.name,
-                                  email=emp.email,
-                                  roles=emp.roles,
-                                  phone_number=emp.phone_number,
-                                  slack_id=emp.slack_id)
-    send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
+        eventV2 = AccountCreatedv2(account_public_id=str(emp.public_id),
+                                      name=emp.name,
+                                      email=emp.email,
+                                      roles=emp.roles,
+                                      phone_number=emp.phone_number,
+                                      slack_id=emp.slack_id)
+        send_event(auth_service_producer, 'accounts', registry, 2, eventV2)
 
 
 def login(request):
@@ -78,7 +84,6 @@ def login(request):
         # check whether it's valid:
         if form.is_valid():
             resp = HttpResponseRedirect(reverse('pjira:index'))
-            print(form.cleaned_data)
             email = form.cleaned_data['email']
             password = form.cleaned_data['password']
             try:
@@ -93,6 +98,7 @@ def login(request):
                 resp.set_cookie('jwt', encoded_jwt)
             except Exception as e:
                 error_message = str(e)
+                logger.warning(error_message)
                 form = LoginForm()
                 return render(request, 'auth_service/login.html', {'form': form, 'error_message': error_message})
 
@@ -111,7 +117,6 @@ def register(request):
         form = RegisterForm(request.POST)
         # check whether it's valid:
         if form.is_valid():
-            print(form.cleaned_data)
             try:
 
                 name = form.cleaned_data['name']
@@ -129,6 +134,7 @@ def register(request):
 
             except Exception as e:
                 error_message = str(e)
+                logger.warning(error_message)
                 form = RegisterForm()
                 return render(request, 'auth_service/register.html', {'form': form, 'error_message': error_message})
 
@@ -174,7 +180,6 @@ def save_account_changes(request):
         form = ChangeAccountForm(request.POST)
         # check whether it's valid:
         if form.is_valid():
-            print(form.cleaned_data)
             try:
                 name = form.cleaned_data['name']
                 email = form.cleaned_data['email']
@@ -189,6 +194,7 @@ def save_account_changes(request):
                 
             except Exception as e:
                 error_message = str(e)
+                logger.warning(error_message)
                 form = ChangeAccountForm()
                 return render(request, 'auth_service/change_account.html', {'form': form, 'error_message': error_message})
 

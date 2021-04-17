@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class AccountCreatedCUDv2(BaseModel):
+class AccountCreatedv2(BaseModel):
     account_public_id: str
     name: str
     email: str
@@ -12,7 +12,7 @@ class AccountCreatedCUDv2(BaseModel):
     roles: List[int]
 
 
-class AccountChangedCUDv2(BaseModel):
+class AccountChangedv2(BaseModel):
     account_public_id: str
     name: str
     email: str
