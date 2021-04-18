@@ -3,8 +3,8 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class AccountCreatedCUDv2(BaseModel):
-    account_id: int
+class AccountCreatedv2(BaseModel):
+    account_public_id: str
     name: str
     email: str
     phone_number: str
@@ -12,8 +12,8 @@ class AccountCreatedCUDv2(BaseModel):
     roles: List[int]
 
 
-class AccountChangedCUDv2(BaseModel):
-    account_id: int
+class AccountChangedv2(BaseModel):
+    account_public_id: str
     name: str
     email: str
     phone_number: str
@@ -22,14 +22,14 @@ class AccountChangedCUDv2(BaseModel):
 
 
 class TransactionCreated(BaseModel):
-    account_id: int
-    task_id: int = 0
+    account_public_id: str
+    task_public_id: str = None
     kind: int
     ts: datetime
 
 
 class TaskCostAssigned(BaseModel):
-    task_id: int
+    task_public_id: str
     description: str
     cost_assign: int
     cost_close: int

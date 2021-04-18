@@ -2,6 +2,7 @@ from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseRedirect, HttpResponseServerError
 from django.urls import reverse
 from django.conf import settings
+from django.db import transaction
 
 from .models import Task, Employee, TaskStatus
 from .forms import AddTaskForm
@@ -9,8 +10,8 @@ from auth_service.models import Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
-from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE
-from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2
+from common.events.business import TaskCreated, TaskAssigned, TaskClosed
+from common.events.cud import AccountCreatedv2, AccountChangedv2
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 
@@ -23,12 +24,12 @@ from kafka import KafkaProducer, KafkaConsumer
 
 
 registry = SchemaRegistry()
-registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
-registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
+registry.register(2, AccountCreatedv2, AccountCreatedHandlerV2)
+registry.register(2, AccountChangedv2, AccountChangedHandlerV2)
 
-registry.register(1, TaskCreatedBE)
-registry.register(1, TaskAssignedBE, TaskAssignedHandler)
-registry.register(1, TaskClosedBE)
+registry.register(1, TaskCreated)
+registry.register(1, TaskAssigned, TaskAssignedHandler)
+registry.register(1, TaskClosed)
 
 
 producer = KafkaProducer(client_id='pjira_tasks',
@@ -64,33 +65,30 @@ def detail(request, task_id):
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def add_task(request):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'POST':
         # create a form instance and populate it with data from the request:
         form = AddTaskForm(request.POST)
         # check whether it's valid:
         if form.is_valid():
-            print(form.cleaned_data)
             try:
-                # emp = Employee.objects.get(name=form.cleaned_data['assignee'])
-                new_task = Task(description=form.cleaned_data['description'])
-                new_task.save()
-                send_event(producer, 'tasks', registry, 1, TaskCreatedBE(task_id=new_task.id, description=new_task.description))
-            except Employee.DoesNotExist:
-                error_message = 'Employee {} does not exist'.format(form.cleaned_data['assignee'])
+                with transaction.atomic():
+                    new_task = Task.objects.create(description=form.cleaned_data['description'])
+                    new_task.save()
+                    send_event(producer, 'tasks', registry, 1, TaskCreated(task_public_id=str(new_task.public_id), description=new_task.description))
+            except Exception as e:
+                error_message = str(e)
                 return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
 
             return HttpResponseRedirect(reverse('pjira:index'))
     else:
         form = AddTaskForm()
 
-    return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
+    return render(request, 'pjira/add_task.html', {'form': form})
 
 
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def close_task(request, task_id):
     if request.method == 'POST':
-        print('About to close', task_id)
         try:
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
@@ -101,12 +99,13 @@ def close_task(request, task_id):
 
         decoded = jwt.decode(request.COOKIES['jwt'], settings.SECRET_KEY, algorithms=[settings.JWT_ALGO])
         my_id = decoded['id']
-        if my_id != task.assignee.id:
+        if my_id != str(task.assignee.public_id):
             return HttpResponseServerError('You cannot close task not assigned to you')
 
-        task.status = TaskStatus.CLOSED
-        task.save()
-        send_event(producer, 'tasks', registry, 1, TaskClosedBE(task_id=task.id, assignee_id=task.assignee.id))
+        with transaction.atomic():
+            task.status = TaskStatus.CLOSED
+            task.save()
+            send_event(producer, 'tasks', registry, 1, TaskClosed(task_public_id=str(task.public_id), assignee_public_id=str(task.assignee.public_id)))
         return HttpResponseRedirect(reverse('pjira:index'))
 
     return HttpResponseServerError("Wrong method")
@@ -115,13 +114,14 @@ def close_task(request, task_id):
 @authorized_only(model=Employee, allowed_roles=[Role.MANAGER])
 def assign_tasks(request):
     if request.method == 'POST':
-        print('Assigning tasks')
         employee_list = Employee.objects.all()
         open_tasks = Task.objects.filter(status=TaskStatus.OPEN)
-        for task in open_tasks:
-            task.assignee = random.choice(employee_list)
-            task.save()
-            send_event(producer, 'tasks', registry, 1, TaskAssignedBE(task_id=task.id, assignee_id=task.assignee.id))
+        with transaction.atomic():
+            for task in open_tasks:
+                task.assignee = random.choice(employee_list)
+                task.save()
+                send_event(producer, 'tasks', registry, 1, TaskAssigned(task_public_id=str(task.public_id),
+                                                                          assignee_public_id=str(task.assignee.public_id)))
         return HttpResponseRedirect(reverse('pjira:index'))
     else:
         return render(request, 'pjira/assign_tasks.html')

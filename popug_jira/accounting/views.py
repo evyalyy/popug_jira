@@ -10,8 +10,8 @@ from auth_service.models import Role
 
 from common.authorized_only import authorized_only
 from common.event_utils import send_event, consume_events
-from common.events.business import TaskCreatedBE, TaskAssignedBE, TaskClosedBE, DailyPaymentCompleted
-from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2, TransactionCreated, TaskCostAssigned
+from common.events.business import TaskCreated, TaskAssigned, TaskClosed, DailyPaymentCompleted
+from common.events.cud import AccountCreatedv2, AccountChangedv2, TransactionCreated, TaskCostAssigned
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 
@@ -21,7 +21,10 @@ import jwt
 import threading
 from datetime import datetime
 import time
+import logging
 from kafka import KafkaProducer, KafkaConsumer
+
+logger = logging.getLogger('root')
 
 
 producer_transactions = KafkaProducer(client_id='accounting_transactions',
@@ -33,12 +36,12 @@ producer_tasks = KafkaProducer(client_id='accounting_tasks',
                          value_serializer=lambda m: m.encode('ascii'))
 
 registry = SchemaRegistry()
-registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
-registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
+registry.register(2, AccountCreatedv2, AccountCreatedHandlerV2)
+registry.register(2, AccountChangedv2, AccountChangedHandlerV2)
 
-registry.register(1, TaskCreatedBE, lambda event: TaskCreatedHandler(event, producer_tasks, 'tasks', registry, 1))
-registry.register(1, TaskAssignedBE, lambda event: TaskAssignedHandler(event, producer_transactions, 'transactions', registry, 1))
-registry.register(1, TaskClosedBE, lambda event: TaskClosedHandler(event, producer_transactions, 'transactions', registry, 1))
+registry.register(1, TaskCreated, lambda event: TaskCreatedHandler(event, producer_tasks, 'tasks', registry, 1))
+registry.register(1, TaskAssigned, lambda event: TaskAssignedHandler(event, producer_transactions, 'transactions', registry, 1))
+registry.register(1, TaskClosed, lambda event: TaskClosedHandler(event, producer_transactions, 'transactions', registry, 1))
 registry.register(1, DailyPaymentCompleted, DailyPaymentCompletedHandler)
 registry.register(1, TaskCostAssigned)
 registry.register(1, TransactionCreated)
@@ -54,12 +57,12 @@ def run_at_end_of_day():
     while True:
         now = datetime.now()
         if now.minute != last_eod_time.minute: # FIXME: payoff every minute, not day
-            print('END OF DAY')
+            logger.info('END OF DAY')
             employees = Employee.objects.all()
             for emp in employees:
                 if emp.wallet > 0:
                     with transaction.atomic():
-                        print('[NOTIFY] payoff for employee {}, amount: {}'.format(emp, emp.wallet))
+                        logger.info('payoff for employee {}, amount: {}'.format(emp, emp.wallet))
                         tr = Transaction.objects.create(account_id=emp,
                                             minus=emp.wallet,
                                             description='Payoff for ' + str(now),
@@ -69,7 +72,7 @@ def run_at_end_of_day():
                         emp.wallet = 0
                         emp.save()
 
-                        send_event(producer_transactions, 'transactions', registry, 1, DailyPaymentCompleted(account_id=emp.id,
+                        send_event(producer_transactions, 'transactions', registry, 1, DailyPaymentCompleted(account_public_id=emp.public_id,
                                                                                                              amount=tr.minus,
                                                                                                              ts=datetime.now()))
 
@@ -111,6 +114,5 @@ def employee_details(request, employee_id):
     except Employee.DoesNotExist:
         raise Http404("Employee {} does not exist".format(employee_id))
     now = datetime.now()
-    print(now)
     transactions = Transaction.objects.filter(account_id=me.id, ts__year=now.year, ts__month=now.month, ts__day=now.day).order_by('-ts')
     return render(request, 'accounting/employee_details.html', {'transactions': transactions, 'me': me})

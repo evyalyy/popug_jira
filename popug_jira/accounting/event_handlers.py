@@ -7,9 +7,12 @@ from .models import Task, Employee, Transaction, TransactionKind
 
 from common.events.cud import TaskCostAssigned, TransactionCreated
 from common.event_utils import send_event
+import logging
+
+logger = logging.getLogger('root')
 
 def AccountCreatedHandlerV2(event):
-    emp = Employee.objects.create(id=event.account_id,
+    emp = Employee.objects.create(public_id=event.account_public_id,
                                         name=event.name,
                                         email=event.email,
                                         roles=event.roles)
@@ -18,7 +21,7 @@ def AccountCreatedHandlerV2(event):
 
 def AccountChangedHandlerV2(event):
 
-    emp = Employee.objects.get(id=event.account_id)
+    emp = Employee.objects.get(public_id=event.account_public_id)
     emp.name = event.name
     emp.email = event.email
     emp.roles = event.roles
@@ -28,23 +31,24 @@ def AccountChangedHandlerV2(event):
 def TaskCreatedHandler(event, producer, topic, schema_registry, version):
     cost_assign = random.randint(10, 20)
     cost_close = random.randint(20, 40)
-    task = Task.objects.create(id=event.task_id,
-                              description=event.description,
-                              cost_assign=cost_assign,
-                              cost_close=cost_close)
-    task.save()
+    with transaction.atomic():
+        task = Task.objects.create(public_id=event.task_public_id,
+                                  description=event.description,
+                                  cost_assign=cost_assign,
+                                  cost_close=cost_close)
+        task.save()
 
-    send_event(producer, topic, schema_registry, version, TaskCostAssigned(task_id=task.id,
-                                                                           description=task.description,
-                                                                           cost_assign=cost_assign,
-                                                                           cost_close=cost_close))
+        send_event(producer, topic, schema_registry, version, TaskCostAssigned(task_public_id=str(task.public_id),
+                                                                               description=task.description,
+                                                                               cost_assign=cost_assign,
+                                                                               cost_close=cost_close))
 
 
 def TaskAssignedHandler(event, producer, topic, schema_registry, version):
 
     with transaction.atomic():
-        emp = Employee.objects.get(id=event.assignee_id)
-        task = Task.objects.get(id=event.task_id)
+        emp = Employee.objects.get(public_id=event.assignee_public_id)
+        task = Task.objects.get(public_id=event.task_public_id)
 
         tr = Transaction.objects.create(account_id=emp,
                                         minus=task.cost_assign,
@@ -55,8 +59,8 @@ def TaskAssignedHandler(event, producer, topic, schema_registry, version):
         emp.wallet -= tr.minus
         emp.save()
 
-        send_event(producer, topic, schema_registry, version, TransactionCreated(account_id=emp.id,
-                                                                                 task_id=task.id,
+        send_event(producer, topic, schema_registry, version, TransactionCreated(account_public_id=str(emp.public_id),
+                                                                                 task_public_id=str(task.public_id),
                                                                                  kind=TransactionKind.TASK_ASSIGNED,
                                                                                  ts = datetime.now()))
 
@@ -64,8 +68,8 @@ def TaskAssignedHandler(event, producer, topic, schema_registry, version):
 def TaskClosedHandler(event, producer, topic, schema_registry, version):
 
     with transaction.atomic():
-        emp = Employee.objects.get(id=event.assignee_id)
-        task = Task.objects.get(id=event.task_id)
+        emp = Employee.objects.get(public_id=event.assignee_public_id)
+        task = Task.objects.get(public_id=event.task_public_id)
 
         tr = Transaction.objects.create(account_id=emp,
                                         plus=task.cost_close,
@@ -76,14 +80,14 @@ def TaskClosedHandler(event, producer, topic, schema_registry, version):
         emp.wallet += tr.plus
         emp.save()
 
-        send_event(producer, topic, schema_registry, version, TransactionCreated(account_id=emp.id,
-                                                                                 task_id=task.id,
+        send_event(producer, topic, schema_registry, version, TransactionCreated(account_public_id=str(emp.public_id),
+                                                                                 task_public_id=str(task.public_id),
                                                                                  kind=TransactionKind.TASK_CLOSED,
                                                                                  ts = datetime.now()))
 
 
 def DailyPaymentCompletedHandler(event):
-      emp = Employee.objects.get(id=event.account_id)
+      emp = Employee.objects.get(public_id=event.account_public_id)
       text = 'Hello, {}, UberPopug inc. sent you money for today: {}'.format(emp.name, event.amount)
       if emp.email:
-          print('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))
+          logger.info('[NOTIFICATION: email] To: {}, text: "{}"'.format(emp.email, text))

@@ -12,14 +12,14 @@ from datetime import datetime, timedelta
 from kafka import KafkaConsumer
 
 from common.event_utils import consume_events
-from common.events.cud import AccountCreatedCUDv2, AccountChangedCUDv2, TaskCostAssigned, TransactionCreated
+from common.events.cud import AccountCreatedv2, AccountChangedv2, TaskCostAssigned, TransactionCreated
 from common.schema_registry import SchemaRegistry
 from .event_handlers import *
 from common.authorized_only import authorized_only
 
 registry = SchemaRegistry()
-registry.register(2, AccountCreatedCUDv2, AccountCreatedHandlerV2)
-registry.register(2, AccountChangedCUDv2, AccountChangedHandlerV2)
+registry.register(2, AccountCreatedv2, AccountCreatedHandlerV2)
+registry.register(2, AccountChangedv2, AccountChangedHandlerV2)
 registry.register(1, TaskCostAssigned, TaskCostAssignedHandler)
 registry.register(1, TransactionCreated, TransactionCreatedHandler)
 

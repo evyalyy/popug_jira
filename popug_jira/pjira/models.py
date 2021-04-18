@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 from auth_service.models import Role
@@ -9,6 +11,7 @@ class TaskStatus(models.IntegerChoices):
 
 
 class Employee(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
     roles = models.JSONField(default=list)
     email = models.EmailField(blank=True, null=True)
@@ -20,6 +23,7 @@ class Employee(models.Model):
 
 
 class Task(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False)
     description = models.CharField(max_length=4096)
     status = models.IntegerField(choices=TaskStatus.choices, default=TaskStatus.OPEN)
     open_date = models.DateTimeField(auto_now=True)

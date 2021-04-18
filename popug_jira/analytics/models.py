@@ -1,14 +1,18 @@
+import uuid
+
 from django.db import models
 
 from accounting.models import TransactionKind
 
 
 class Employee(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200)
     roles = models.JSONField(default=list)
 
 
 class Task(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False)
     description = models.CharField(max_length=4096)
     cost_assign = models.IntegerField(default=0)
     cost_close = models.IntegerField(default=0)
