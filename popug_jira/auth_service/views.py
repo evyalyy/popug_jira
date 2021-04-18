@@ -77,7 +77,6 @@ def create_employee(name, email, password, roles, phone_number, slack_id):
 
 def login(request):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'POST':
         # create a form instance and populate it with data from the request:
         form = LoginForm(request.POST)
@@ -106,12 +105,11 @@ def login(request):
     else:
         form = LoginForm()
 
-    return render(request, 'auth_service/login.html', {'form': form, 'error_message': error_message})
+    return render(request, 'auth_service/login.html', {'form': form})
 
 
 def register(request):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'POST':
         # create a form instance and populate it with data from the request:
         form = RegisterForm(request.POST)
@@ -142,7 +140,7 @@ def register(request):
     else:
         form = RegisterForm()
 
-    return render(request, 'auth_service/register.html', {'form': form, 'error_message': error_message})
+    return render(request, 'auth_service/register.html', {'form': form})
 
 
 @authorized_only(model=Employee, allowed_roles=[Role.ADMIN])
@@ -154,7 +152,6 @@ def admin_list(request):
 @authorized_only(model=Employee, allowed_roles=[Role.ADMIN])
 def change_account(request, account_id):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'GET':
         try:
             acc = Employee.objects.get(id=account_id)
@@ -166,7 +163,7 @@ def change_account(request, account_id):
                                           'roles':acc.roles,
                                           'phone_number':acc.phone_number,
                                           'slack_id': acc.slack_id})
-        return render(request, 'auth_service/change_account.html', {'form': form, 'error_message': error_message})
+        return render(request, 'auth_service/change_account.html', {'form': form})
 
     raise HttpResponseServerError("Wrong method")
 
@@ -174,7 +171,6 @@ def change_account(request, account_id):
 @authorized_only(model=Employee, allowed_roles=[Role.ADMIN])
 def save_account_changes(request):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'POST':
         # create a form instance and populate it with data from the request:
         form = ChangeAccountForm(request.POST)

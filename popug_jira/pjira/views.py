@@ -65,7 +65,6 @@ def detail(request, task_id):
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def add_task(request):
     # if this is a POST request we need to process the form data
-    error_message = None
     if request.method == 'POST':
         # create a form instance and populate it with data from the request:
         form = AddTaskForm(request.POST)
@@ -73,24 +72,23 @@ def add_task(request):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    new_task = Task(description=form.cleaned_data['description'])
+                    new_task = Task.objects.create(description=form.cleaned_data['description'])
                     new_task.save()
                     send_event(producer, 'tasks', registry, 1, TaskCreated(task_public_id=str(new_task.public_id), description=new_task.description))
-            except Employee.DoesNotExist:
-                error_message = 'Employee {} does not exist'.format(form.cleaned_data['assignee'])
+            except Exception as e:
+                error_message = str(e)
                 return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
 
             return HttpResponseRedirect(reverse('pjira:index'))
     else:
         form = AddTaskForm()
 
-    return render(request, 'pjira/add_task.html', {'form': form, 'error_message': error_message})
+    return render(request, 'pjira/add_task.html', {'form': form})
 
 
 @authorized_only(model=Employee, allowed_roles=[Role.EMPLOYEE])
 def close_task(request, task_id):
     if request.method == 'POST':
-        print('About to close', task_id)
         try:
             task = Task.objects.get(pk=task_id)
         except Task.DoesNotExist:
@@ -103,6 +101,7 @@ def close_task(request, task_id):
         my_id = decoded['id']
         if my_id != str(task.assignee.public_id):
             return HttpResponseServerError('You cannot close task not assigned to you')
+
         with transaction.atomic():
             task.status = TaskStatus.CLOSED
             task.save()
